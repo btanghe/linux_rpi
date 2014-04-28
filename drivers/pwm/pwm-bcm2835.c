@@ -19,9 +19,9 @@
 
 /*mmio regiser mapping*/
 
-#define DUTY			0x14
-#define PERIOD			0x10
-#define CHANNEL			0x10
+#define DUTY		0x14
+#define PERIOD		0x10
+#define CHANNEL		0x10
 
 #define PWM_ENABLE	0x00000001
 #define PWM_POLARITY	0x00000010
@@ -135,7 +135,10 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	pwm->mmio_base = devm_ioremap_resource(&pdev->dev, r);
 	if (IS_ERR(pwm->mmio_base))
+	{
+		devm_kfree(&pdev->dev, pwm);
 		return PTR_ERR(pwm->mmio_base);
+	}
 
 	start = r->start;
 	end = r->end;
@@ -148,7 +151,7 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 	if (ret < 0) {
 		dev_err(&pdev->dev, "pwmchip_add() failed: %d\n", ret);
 		devm_kfree(&pdev->dev, pwm);
-		goto chip_failed;
+		return -1;
 	}
 
 	/*set the pwm0 configuration*/
@@ -158,11 +161,6 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, pwm);
 
 	return 0;
-
-chip_failed:
-	devm_kfree(&pdev->dev, pwm);
-	return -1;
-
 }
 
 static int bcm2835_pwm_remove(struct platform_device *pdev)
@@ -183,7 +181,6 @@ static const struct of_device_id bcm2835_pwm_of_match[] = {
 };
 
 MODULE_DEVICE_TABLE(of, bcm2835_pwm_of_match);
-
 
 static struct platform_driver bcm2835_pwm_driver = {
 	.driver = {
