@@ -67,8 +67,9 @@ config PWM_BCM2835
 	depends on MACH_BCM2835 || MACH_BCM2708
 	help
 	  PWM framework driver for BCM2835 controller (raspberry pi)
-	  
-	  The pwm core frequency is set on 1Mhz, period above 1000 are accepted.
+	  Only 1 channel is implemented.
+
+	  The pwm core is tested with a pwm basic frequency of 1Mhz.
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called pwm-bcm2835.

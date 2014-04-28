@@ -1,0 +1,13 @@
+bcm2835 PWM controller
+
+Required properties:
+- compatible: should be "bcrm,pwm-bcm2835"
+- reg: physical base address and length of the controller's registers
+
+Examples:
+
+pwm@0x2020C000 {
+	compatible = "bcrm,pwm-bcm2835";
+	reg = <0x2020C000 0x28>;
+	clocks = <&clk_pwm>;
+};

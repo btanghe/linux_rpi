@@ -4,6 +4,9 @@
  *
  * Copyright (C) 2014 Thomas more
  *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2.
  */
 
 #include <linux/clk.h>
@@ -123,6 +126,7 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 	clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(clk)) {
 		dev_err(&pdev->dev, "could not find clk: %ld\n", PTR_ERR(clk));
+		devm_kfree(&pdev->dev, pwm);
 		return PTR_ERR(clk);
 	}
 
@@ -136,8 +140,6 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 	start = r->start;
 	end = r->end;
 
-	platform_set_drvdata(pdev, pwm);
-
 	pwm->chip.dev = &pdev->dev;
 	pwm->chip.ops = &bcm2835_pwm_ops;
 	pwm->chip.npwm = 2;
@@ -145,12 +147,15 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 	ret = pwmchip_add(&pwm->chip);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "pwmchip_add() failed: %d\n", ret);
+		devm_kfree(&pdev->dev, pwm);
 		goto chip_failed;
 	}
 
 	/*set the pwm0 configuration*/
 	iowrite32((ioread32(pwm->mmio_base) & ~MASK_CTL_PWM)
 				| CTL_PWM, pwm->mmio_base);
+
+	platform_set_drvdata(pdev, pwm);
 
 	return 0;
 
@@ -173,9 +178,12 @@ static int bcm2835_pwm_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id bcm2835_pwm_of_match[] = {
-	{ .compatible = "rpi,pwm-bcm2835" },
-	{ }
+	{ .compatible = "bcrm,pwm-bcm2835", },
+	{ /* sentinel */ }
 };
+
+MODULE_DEVICE_TABLE(of, bcm2835_pwm_of_match);
+
 
 static struct platform_driver bcm2835_pwm_driver = {
 	.driver = {
@@ -190,3 +198,4 @@ module_platform_driver(bcm2835_pwm_driver);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR(DRIVER_AUTHOR);
+MODULE_DESCRIPTION(DRIVER_DESC);
