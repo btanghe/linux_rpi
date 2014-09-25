@@ -1,7 +1,4 @@
 /*
- * pwm-bcm2835 driver
- * Standard raspberry pi (gpio18 - pwm0)
- *
  * Copyright (C) 2014 Thomas more
  *
  * This program is free software; you can redistribute it and/or modify
@@ -17,88 +14,118 @@
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
 
-/*mmio regiser mapping*/
-
 #define DUTY		0x14
 #define PERIOD		0x10
 #define CHANNEL		0x10
 
-#define PWM_ENABLE	0x00000001
-#define PWM_POLARITY	0x00000010
+#define PWM_ENABLE	(1 << 0)
+#define PWM_POLARITY	(1 << 4)
 
-#define MASK_CTL_PWM	0x000000FF
-#define CTL_PWM		0x00000081
+#define PWM_CONTROL_MASK	0xff
+#define PWM_CONTROL_ENABLE	0x80
+#define PWM_CONTROL_DISABLE	0xff
+#define MIN_PERIOD		108		//9.2Mhz max pwm clock
 
-#define DRIVER_AUTHOR "Bart Tanghe <bart.tanghe@thomasmore.be>"
-#define DRIVER_DESC "A bcm2835 pwm driver - raspberry pi development platform"
-
-struct bcm2835_pwm_chip {
+struct bcm2835_pwm {
 	struct pwm_chip chip;
 	struct device *dev;
 	int channel;
-	int scaler;
-	void __iomem *mmio_base;
+	unsigned long scaler;
+	void __iomem *base;
 };
 
-static inline struct bcm2835_pwm_chip *to_bcm2835_pwm_chip(
-					struct pwm_chip *chip){
-
-	return container_of(chip, struct bcm2835_pwm_chip, chip);
+static inline struct bcm2835_pwm  *to_bcm2835_pwm(struct pwm_chip *chip)
+{
+	return container_of(chip, struct bcm2835_pwm, chip);
 }
 
-static int bcm2835_pwm_config(struct pwm_chip *chip,
-			      struct pwm_device *pwm,
-			      int duty_ns, int period_ns){
+static int bcm2835_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
+{
+	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
+	u32 value;
 
-	struct bcm2835_pwm_chip *pc;
+	value = readl(pc->base) & ~(PWM_CONTROL_MASK << 8 * pwm->pwm);
+	value |= (PWM_CONTROL_ENABLE << (8 * pwm->pwm));
+	writel(value,pc->base);
+	return 0;
+}
 
-	pc = container_of(chip, struct bcm2835_pwm_chip, chip);
+static void bcm2835_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
+{	//TODO: change the pwm_control value and second channel implementatio
+	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
+	u32 value;
 
-	iowrite32(duty_ns/pc->scaler, pc->mmio_base + DUTY);
-	iowrite32(period_ns/pc->scaler, pc->mmio_base + PERIOD);
+	value = readl(pc->base) & ~(PWM_CONTROL_MASK << 8 * pwm->pwm);
+	value &= (~PWM_CONTROL_DISABLE << (8 * pwm->pwm));
+	writel(value,pc->base);
+}
+
+static int bcm2835_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
+			      int duty_ns, int period_ns)
+{
+	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
+	printk("period %d\n",period_ns);
+	if (period_ns > MIN_PERIOD)
+	{
+		writel(duty_ns / pc->scaler, pc->base + DUTY + pwm->pwm * CHANNEL);
+		writel(period_ns / pc->scaler, pc->base + PERIOD + pwm->pwm * CHANNEL);
+	}
+	else
+	{
+		dev_err(pc->dev,"Period not supported\n");
+	}
 
 	return 0;
 }
 
 static int bcm2835_pwm_enable(struct pwm_chip *chip,
-			      struct pwm_device *pwm){
+			      struct pwm_device *pwm)
+{
 
-	struct bcm2835_pwm_chip *pc;
+	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
+	u32 value;
 
-	pc = container_of(chip, struct bcm2835_pwm_chip, chip);
-
-	iowrite32(ioread32(pc->mmio_base) | PWM_ENABLE, pc->mmio_base);
+	//value = readl(pc->base) & ~(PWM_CONTROL_MASK << 8 * pwm->pwm); ;
+	value = readl(pc->base);
+	value |= (PWM_ENABLE << (8 * pwm->pwm));
+	writel(value, pc->base);
 	return 0;
 }
 
 static void bcm2835_pwm_disable(struct pwm_chip *chip,
 				struct pwm_device *pwm)
 {
-	struct bcm2835_pwm_chip *pc;
+	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
+	u32 value;
 
-	pc = to_bcm2835_pwm_chip(chip);
-
-	iowrite32(ioread32(pc->mmio_base) & ~PWM_ENABLE, pc->mmio_base);
+	//value = readl(pc->base) | ~(PWM_CONTROL_MASK << 8 * pwm->pwm);
+	value = readl(pc->base);
+	value &= ~(PWM_ENABLE << (8 * pwm->pwm));
+	writel(value, pc->base);
 }
 
 static int bcm2835_set_polarity(struct pwm_chip *chip, struct pwm_device *pwm,
 				enum pwm_polarity polarity)
 {
-	struct bcm2835_pwm_chip *pc;
+	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
+	u32 value;
 
-	pc = to_bcm2835_pwm_chip(chip);
-
-	if (polarity == PWM_POLARITY_NORMAL)
-		iowrite32((ioread32(pc->mmio_base) & ~PWM_POLARITY),
-						pc->mmio_base);
-	else if (polarity == PWM_POLARITY_INVERSED)
-		iowrite32((ioread32(pc->mmio_base) | PWM_POLARITY),
-						pc->mmio_base);
-
+	if (polarity == PWM_POLARITY_NORMAL){
+		value = readl(pc->base);
+		value &= ~(PWM_POLARITY << 8 * pwm->pwm);
+		writel(value,pc->base);
+	}
+	else if (polarity == PWM_POLARITY_INVERSED){
+		value = readl(pc->base);
+		value |= PWM_POLARITY << (8 * pwm->pwm);
+		writel(value,pc->base);
+	}
 	return 0;
 }
 
 static const struct pwm_ops bcm2835_pwm_ops = {
+	.request = bcm2835_pwm_request,
+	.free = bcm2835_pwm_free,
 	.config = bcm2835_pwm_config,
 	.enable = bcm2835_pwm_enable,
 	.disable = bcm2835_pwm_disable,
@@ -108,16 +135,13 @@ static const struct pwm_ops bcm2835_pwm_ops = {
 
 static int bcm2835_pwm_probe(struct platform_device *pdev)
 {
-	struct bcm2835_pwm_chip *pwm;
-
+	struct bcm2835_pwm *pwm;
 	int ret;
 	struct resource *r;
-	u32 start, end;
 	struct clk *clk;
 
 	pwm = devm_kzalloc(&pdev->dev, sizeof(*pwm), GFP_KERNEL);
 	if (!pwm) {
-		dev_err(&pdev->dev, "failed to allocate memory\n");
 		return -ENOMEM;
 	}
 
@@ -125,23 +149,18 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 
 	clk = clk_get(&pdev->dev, NULL);
 	if (IS_ERR(clk)) {
-		dev_err(&pdev->dev, "could not find clk: %ld\n", PTR_ERR(clk));
-		devm_kfree(&pdev->dev, pwm);
+		dev_err(&pdev->dev, "no clock found: %ld\n", PTR_ERR(clk));
 		return PTR_ERR(clk);
 	}
 
-	pwm->scaler = (int)1000000000/clk_get_rate(clk);
+	pwm->scaler = NSEC_PER_SEC / clk_get_rate(clk);
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	pwm->mmio_base = devm_ioremap_resource(&pdev->dev, r);
-	if (IS_ERR(pwm->mmio_base))
+	pwm->base = devm_ioremap_resource(&pdev->dev, r);
+	if (IS_ERR(pwm->base))
 	{
-		devm_kfree(&pdev->dev, pwm);
-		return PTR_ERR(pwm->mmio_base);
+		return PTR_ERR(pwm->base);
 	}
-
-	start = r->start;
-	end = r->end;
 
 	pwm->chip.dev = &pdev->dev;
 	pwm->chip.ops = &bcm2835_pwm_ops;
@@ -150,42 +169,28 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 	ret = pwmchip_add(&pwm->chip);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "pwmchip_add() failed: %d\n", ret);
-		devm_kfree(&pdev->dev, pwm);
 		return -1;
 	}
-
-	/*set the pwm0 configuration*/
-	iowrite32((ioread32(pwm->mmio_base) & ~MASK_CTL_PWM)
-				| CTL_PWM, pwm->mmio_base);
-
 	platform_set_drvdata(pdev, pwm);
-
 	return 0;
 }
 
 static int bcm2835_pwm_remove(struct platform_device *pdev)
 {
-
-	struct bcm2835_pwm_chip *pc;
-	pc  = platform_get_drvdata(pdev);
-
-	if (WARN_ON(!pc))
-		return -ENODEV;
+	struct bcm2835_pwm *pc = platform_get_drvdata(pdev);
 
 	return pwmchip_remove(&pc->chip);
 }
 
 static const struct of_device_id bcm2835_pwm_of_match[] = {
-	{ .compatible = "bcrm,pwm-bcm2835", },
+	{ .compatible = "brcm,bcm2835-pwm", },
 	{ /* sentinel */ }
 };
-
 MODULE_DEVICE_TABLE(of, bcm2835_pwm_of_match);
 
 static struct platform_driver bcm2835_pwm_driver = {
 	.driver = {
-		.name = "pwm-bcm2835",
-		.owner = THIS_MODULE,
+		.name = "bcm2835-pwm",
 		.of_match_table = bcm2835_pwm_of_match,
 	},
 	.probe = bcm2835_pwm_probe,
@@ -193,6 +198,6 @@ static struct platform_driver bcm2835_pwm_driver = {
 };
 module_platform_driver(bcm2835_pwm_driver);
 
+MODULE_AUTHOR("Bart Tanghe <bart.tanghe@thomasmore.be");
+MODULE_DESCRIPTION("Broadcom BCM2835 PWM driver");
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR(DRIVER_AUTHOR);
-MODULE_DESCRIPTION(DRIVER_DESC);

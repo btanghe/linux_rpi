@@ -66,10 +66,7 @@ config PWM_BCM2835
 	tristate "BCM2835 PWM support"
 	depends on MACH_BCM2835 || MACH_BCM2708
 	help
-	  PWM framework driver for BCM2835 controller (raspberry pi)
-	  Only 1 channel is implemented.
-
-	  The pwm core is tested with a pwm basic frequency of 1Mhz.
+	  PWM framework driver for BCM2835 controller (Raspberry Pi)
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called pwm-bcm2835.
