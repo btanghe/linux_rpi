@@ -72,7 +72,7 @@ static int bcm2835_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 		writel(period_ns / pc->scaler,
 			pc->base + PERIOD + pwm->pwm * CHANNEL);
 	} else {
-		dev_err(pc->dev,"Period not supported\n");
+		dev_err(pc->dev, "Period not supported\n");
 	}
 
 	return 0;
@@ -81,11 +81,9 @@ static int bcm2835_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 static int bcm2835_pwm_enable(struct pwm_chip *chip,
 			      struct pwm_device *pwm)
 {
-
 	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
 	u32 value;
 
-	//value = readl(pc->base) & ~(PWM_CONTROL_MASK << 8 * pwm->pwm); ;
 	value = readl(pc->base);
 	value |= (PWM_ENABLE << (8 * pwm->pwm));
 	writel(value, pc->base);
@@ -98,7 +96,6 @@ static void bcm2835_pwm_disable(struct pwm_chip *chip,
 	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
 	u32 value;
 
-	//value = readl(pc->base) | ~(PWM_CONTROL_MASK << 8 * pwm->pwm);
 	value = readl(pc->base);
 	value &= ~(PWM_ENABLE << (8 * pwm->pwm));
 	writel(value, pc->base);
@@ -157,9 +154,8 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	pwm->base = devm_ioremap_resource(&pdev->dev, r);
-	if (IS_ERR(pwm->base)) {
+	if (IS_ERR(pwm->base))
 		return PTR_ERR(pwm->base);
-	}
 
 	pwm->chip.dev = &pdev->dev;
 	pwm->chip.ops = &bcm2835_pwm_ops;
