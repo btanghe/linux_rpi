@@ -26,7 +26,7 @@
 #define PWM_CONTROL_MASK	0xff
 #define PWM_MODE		0x80		/* set timer in pwm mode */
 #define DEFAULT			0xff		/* set timer in default mode */
-#define PWM_CONTROL_STRIDE 	8
+#define PWM_CONTROL_STRIDE	8
 #define MIN_PERIOD		108		/* 9.2Mhz max pwm clock */
 
 struct bcm2835_pwm {
@@ -154,10 +154,9 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 
 	pwm->clk = clk;
 	ret = clk_prepare_enable(pwm->clk);
-	if (ret) {
-                devm_kfree(pdev->dev, pwm);
-                return ret;
-        }
+	if (ret)
+		return ret;
+
 	pwm->scaler = NSEC_PER_SEC / clk_get_rate(clk);
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
