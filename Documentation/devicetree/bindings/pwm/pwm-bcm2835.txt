@@ -7,7 +7,18 @@ Required properties:
 Examples:
 
 pwm@2020c000 {
-	compatible = "bcrm,bcm2835-pwm";
+	compatible = "brcm,bcm2835-pwm";
 	reg = <0x2020c000 0x28>;
 	clocks = <&clk_pwm>;
+};
+
+clocks {
+	....
+		clk_pwm: pwm {
+			compatible = "fixed-clock";
+			reg = <3>;
+			#clock-cells = <0>;
+			clock-frequency = <9200000>;
+		};
+	....
 };
