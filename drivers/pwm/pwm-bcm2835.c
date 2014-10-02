@@ -1,7 +1,5 @@
 /*
- * Copyright (C) 2014 Thomas More
- *
- * Author: Bart Tanghe <bart.tanghe@thomasmore.be>
+ * Copyright 2014 Bart Tanghe <bart.tanghe@thomasmore.be>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
