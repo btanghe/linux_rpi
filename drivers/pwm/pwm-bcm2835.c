@@ -47,8 +47,8 @@ static int bcm2835_pwm_request(struct pwm_chip *chip, struct pwm_device *pwm)
 	u32 value;
 
 	value = readl(pc->base);
-	value &= ~(PWM_CONTROL_MASK << PWM_CONTROL_STRIDE * pwm->pwm);
-	value |= (PWM_MODE << (PWM_CONTROL_STRIDE * pwm->pwm));
+	value &= ~(PWM_CONTROL_MASK << PWM_CONTROL_STRIDE * pwm->hwpwm);
+	value |= (PWM_MODE << (PWM_CONTROL_STRIDE * pwm->hwpwm));
 	writel(value, pc->base);
 	return 0;
 }
@@ -58,9 +58,8 @@ static void bcm2835_pwm_free(struct pwm_chip *chip, struct pwm_device *pwm)
 	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
 	u32 value;
 
-	value = readl(pc->base)
-	value &= ~(PWM_CONTROL_MASK << PWM_CONTROL_STRIDE * pwm->pwm);
-	value &= (~DEFAULT << (PWM_CONTROL_STRIDE * pwm->pwm));
+	value = readl(pc->base);
+	value &= (~DEFAULT << (PWM_CONTROL_STRIDE * pwm->hwpwm));
 	writel(value, pc->base);
 }
 
@@ -72,13 +71,11 @@ static int bcm2835_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 	if (period_ns <= MIN_PERIOD) {
 		dev_err(pc->dev, "Period not supported\n");
 		return -EINVAL;
-	} else {
-		writel(duty_ns / pc->scaler,
-			 pc->base + DUTY + pwm->pwm * CHANNEL);
-		writel(period_ns / pc->scaler,
-			pc->base + PERIOD + pwm->pwm * CHANNEL);
-		return 0;
 	}
+	writel(duty_ns / pc->scaler, pc->base + DUTY + pwm->hwpwm * CHANNEL);
+	writel(period_ns / pc->scaler,
+		pc->base + PERIOD + pwm->hwpwm * CHANNEL);
+		return 0;
 }
 
 static int bcm2835_pwm_enable(struct pwm_chip *chip,
@@ -88,7 +85,7 @@ static int bcm2835_pwm_enable(struct pwm_chip *chip,
 	u32 value;
 
 	value = readl(pc->base);
-	value |= (PWM_ENABLE << (PWM_CONTROL_STRIDE * pwm->pwm));
+	value |= (PWM_ENABLE << (PWM_CONTROL_STRIDE * pwm->hwpwm));
 	writel(value, pc->base);
 	return 0;
 }
@@ -100,7 +97,7 @@ static void bcm2835_pwm_disable(struct pwm_chip *chip,
 	u32 value;
 
 	value = readl(pc->base);
-	value &= ~(PWM_ENABLE << (PWM_CONTROL_STRIDE * pwm->pwm));
+	value &= ~(PWM_ENABLE << (PWM_CONTROL_STRIDE * pwm->hwpwm));
 	writel(value, pc->base);
 }
 
@@ -110,13 +107,11 @@ static int bcm2835_set_polarity(struct pwm_chip *chip, struct pwm_device *pwm,
 	struct bcm2835_pwm *pc = to_bcm2835_pwm(chip);
 	u32 value;
 
-	if (polarity == PWM_POLARITY_NORMAL) {
-		value = readl(pc->base);
-		value &= ~(PWM_POLARITY << PWM_CONTROL_STRIDE * pwm->pwm);
-	} else if (polarity == PWM_POLARITY_INVERSED) {
-		value = readl(pc->base);
-		value |= PWM_POLARITY << (PWM_CONTROL_STRIDE * pwm->pwm);
-	}
+	value = readl(pc->base);
+	if (polarity == PWM_POLARITY_NORMAL)
+		value &= ~(PWM_POLARITY << PWM_CONTROL_STRIDE * pwm->hwpwm);
+	else if (polarity == PWM_POLARITY_INVERSED)
+		value |= PWM_POLARITY << (PWM_CONTROL_STRIDE * pwm->hwpwm);
 	writel(value, pc->base);
 	return 0;
 }
@@ -152,8 +147,10 @@ static int bcm2835_pwm_probe(struct platform_device *pdev)
 
 	pwm->clk = clk;
 	ret = clk_prepare_enable(pwm->clk);
-	if (ret)
+	if (ret) {
+		clk_disable_unprepare(pwm->clk);
 		return ret;
+	}
 
 	pwm->scaler = NSEC_PER_SEC / clk_get_rate(clk);
 

@@ -64,7 +64,7 @@ config PWM_ATMEL_TCB
 
 config PWM_BCM2835
 	tristate "BCM2835 PWM support"
-	depends on MACH_BCM2835 || MACH_BCM2708
+	depends on ACH_BCM2835
 	help
 	  PWM framework driver for BCM2835 controller (Raspberry Pi)
 
